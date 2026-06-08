@@ -23,17 +23,13 @@ const chatRooms = new Map()
 io.on("connection", (socket) => {
   console.log("User Connected:", socket.id)
 
-  // ─── Existing identity event ─────────────────────────
   socket.on("identity", (userId) => {
     console.log("User Id:", userId)
   })
 
   // ─── User live chat shuru karta hai ──────────────────
   socket.on("chat:start", ({ roomId, userId, userName }) => {
-    // Room join karo
     socket.join(roomId)
-
-    // Room data save karo
     chatRooms.set(roomId, {
       userId,
       userName,
@@ -42,37 +38,28 @@ io.on("connection", (socket) => {
       adminName: null,
       adminSocketId: null,
     })
-
     console.log(`Chat started — Room: ${roomId} — User: ${userName}`)
   })
 
   // ─── Admin chat join karta hai ────────────────────────
   socket.on("chat:join", ({ roomId, adminId, adminName }) => {
     const room = chatRooms.get(roomId)
-
     if (!room) {
       socket.emit("chat:error", { message: "Room nahi mila" })
       return
     }
-
-    // Check karo agar admin pehle se join kar chuka hai
     if (room.adminId) {
       socket.emit("chat:already-taken", {
         message: "Koi aur admin pehle se join kar chuka hai",
       })
       return
     }
-
-    // Admin ko room mein add karo
     socket.join(roomId)
     room.adminId = adminId
     room.adminName = adminName
     room.adminSocketId = socket.id
     chatRooms.set(roomId, room)
-
-    // User ko batao admin aa gaya
     socket.to(roomId).emit("chat:admin-joined", { adminName })
-
     console.log(`Admin joined — Room: ${roomId} — Admin: ${adminName}`)
   })
 
@@ -84,11 +71,29 @@ io.on("connection", (socket) => {
       text,
       createdAt: new Date(),
     }
-
-    // Dono ko message bhejo (sender ko bhi confirm ke liye nahi — sirf doosre ko)
     socket.to(roomId).emit("chat:message", message)
-
     console.log(`Message in ${roomId} from ${senderName}: ${text}`)
+  })
+
+  // ─── FIX 1: Typing relay — YAHAN SE ADD KIYA ─────────
+  // Pehle yeh event bilkul nahi tha — isliye typing dots kaam nahi karte the
+  socket.on("chat:typing", ({ roomId, isTyping, senderName }) => {
+    socket.to(roomId).emit("chat:typing", { isTyping, senderName })
+  })
+
+  // ─── File message relay ───────────────────────────────
+  socket.on("chat:file", ({ roomId, sender, senderName, fileName, fileUrl, fileType }) => {
+    const message = {
+      sender,
+      senderName,
+      fileName,
+      fileUrl,
+      fileType,
+      type: "file",
+      createdAt: new Date(),
+    }
+    socket.to(roomId).emit("chat:file", message)
+    console.log(`File in ${roomId} from ${senderName}: ${fileName}`)
   })
 
   // ─── Chat band karo ──────────────────────────────────
@@ -101,7 +106,6 @@ io.on("connection", (socket) => {
 
   // ─── Disconnect ──────────────────────────────────────
   socket.on("disconnect", () => {
-    // Agar koi chat room mein tha toh doosre ko notify karo
     chatRooms.forEach((room, roomId) => {
       if (room.userSocketId === socket.id) {
         socket.to(roomId).emit("chat:user-left")
@@ -114,7 +118,6 @@ io.on("connection", (socket) => {
         chatRooms.set(roomId, room)
       }
     })
-
     console.log("User Disconnected:", socket.id)
   })
 })
