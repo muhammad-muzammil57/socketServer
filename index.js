@@ -71,8 +71,7 @@ io.on("connection", (socket) => {
     chatRooms.set(roomId, room)
 
     // User ko batao admin aa gaya
-    socket.to(roomId).emit("chat:admin-joined", { adminName })
-
+io.to(roomId).emit("chat:admin-joined", { adminName })
     console.log(`Admin joined — Room: ${roomId} — Admin: ${adminName}`)
   })
 
